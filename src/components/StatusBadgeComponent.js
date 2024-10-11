@@ -1,6 +1,8 @@
 // src/components/StatusBadgeComponent.js
 import React from 'react';
-import { Badge, Avatar, styled } from '@mui/material';
+import { Badge, Avatar, styled, Box } from '@mui/material';
+import { hslToHex, getRandomLightColor, getRandomDarkColor, getContentFromReceiver, convertUTCtoLocal } from '../utils/utils';
+import { ariaHidden } from '@mui/material/Modal/ModalManager';
 
 const StatusBadge = styled(Badge)(({ theme, status }) => {
   const statusColors = {
@@ -43,22 +45,38 @@ const StatusBadge = styled(Badge)(({ theme, status }) => {
   };
 });
 
-const StatusBadgeComponent = ({ userStatus, avatar1, openMenu, handleStatusMenuOpen , alt }) => {
+const StatusBadgeComponent = ({ userStatus, avatar1, openMenu, handleStatusMenuOpen, alt, shrinkedName, showCount}) => {
   return <StatusBadge
     overlap="circular"
     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
     variant="dot"
     status={userStatus}
-    style={{
-      marginTop: '1rem'
-    }}
   >
     <Avatar
-      src={avatar1}
+      src={avatar1.photo ? avatar1.photo : shrinkedName}
       onClick={openMenu ? handleStatusMenuOpen : null}
       style={{ cursor: 'pointer', width: 40, height: 40 }}
       alt={alt}
     />
+    {(avatar1.unreadCount > 0 && showCount) && (
+      <Box
+        position="absolute"
+        top="-4px"
+        right="-4px"
+        bgcolor="#ef4444"
+        color="#fff"
+        borderRadius="50%"
+        width="20px"
+        height="20px"
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+        fontSize="10px"
+        fontWeight={900}
+      >
+        {avatar1.unreadCount}
+      </Box>
+    )}
   </StatusBadge>;
 };
 

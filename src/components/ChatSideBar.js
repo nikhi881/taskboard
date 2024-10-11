@@ -5,7 +5,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import SendIcon from '@mui/icons-material/Send';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-
+import { doc, getDoc } from "firebase/firestore";
 import { firestore, auth } from '../firebasaeConfig';
 
 // Import SVG assets 
@@ -179,21 +179,12 @@ const ChatSideBar = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
-  const [users, setUsers] = useState([]);
-  const messagesEndRef = useRef(null);
+  const [userDetails, setUserDetails] = useState([]);
+
   const searchAnchorRef = useRef(null); // Ref for Popper
 
-  const { uid, photoURL, name } = JSON.parse(localStorage.getItem('userInfo'));
+  const { uid, photo, name } = JSON.parse(localStorage.getItem('userInfo'));
 
-  useEffect(() => {
-    if (Notification.permission === 'default') {
-      Notification.requestPermission().then(permission => {
-        if (permission === 'granted') {
-          console.log('Notification permission granted.');
-        }
-      });
-    }
-  }, []);
 
   useEffect(() => {
     const unsubscribe = firestore.collection('Messages').onSnapshot(
@@ -211,73 +202,22 @@ const ChatSideBar = () => {
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
+
+
+  const updateUserReadUnread = () => {
     const data = manipulateData();
     setAvatars(data);
-    setSelectedUser(data[0]);
-
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollTop = messagesEndRef.current.scrollHeight;
-    }
-
-    data.forEach((avatar) => {
-      avatar.details.forEach((detail) => {
-        const latestMessage = detail.messages[detail.messages.length - 1];
-        if (latestMessage.sender !== uid && new Date(latestMessage.createdAt) > new Date(getLastReadTimestamp(latestMessage.sender))) {
-          new Notification(latestMessage.sender, {
-            body: latestMessage.text,
-            icon: latestMessage.photoURL || avatar1,
-          });
-        }
-      });
-    });
-  }, [messages]);
-
+    setSelectedUser(data[0])
+  }
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollTop = messagesEndRef.current.scrollHeight;
-    }
-  }, [messages, selectedUser]);
-
-  const handleExpand = useCallback(() => {
-    setExpanded(true);
-    setSelectedUser(avatars[0]);
-  }, [avatars]);
-
-  const handleAvatarClick = useCallback((avatar) => {
-    setSelectedUser(avatar);
-    setExpanded(true);
-    markAllAsRead(avatar.contact);
-  }, []);
+    updateUserReadUnread()
+  }, [messages, userStatus]);
 
   const handleClose = () => {
     setExpanded(false);
     setSelectedUser(null);
   };
 
-  const sendMessage = useCallback(async (e) => {
-    e.preventDefault();
-
-    if (!selectedUser || !selectedUser.contact) {
-      console.error('No user selected or user contact is missing.');
-      return;
-    }
-
-    try {
-      await firestore.collection('Messages').add({
-        id: uuidv4(),
-        text: messageInput,
-        createdAt: new Date().toISOString(),
-        photoURL: photoURL || null,
-        reciever: selectedUser.contact,
-        sender: uid,
-        group: false
-      });
-    } catch (error) {
-      console.error('Error adding event: ', error);
-    }
-    setMessageInput('');
-  }, [messageInput, selectedUser, uid, photoURL]);
 
   const manipulateData = useCallback(() => {
     const output = [];
@@ -285,7 +225,7 @@ const ChatSideBar = () => {
     userInfo.lastReadTimestamps = userInfo.lastReadTimestamps || {};
 
     messages?.forEach((msg) => {
-      if (msg.reciever !== name && msg.sender !== uid) {
+      if (msg.reciever !== uid && msg.sender !== uid) {
         return;
       }
 
@@ -307,39 +247,26 @@ const ChatSideBar = () => {
       const newDetail = {
         id: msg.id,
         group: msg.group,
-        photoURL: msg.photoURL,
+        photo: msg.photo,
         createdAt: msg.createdAt,
         sender: msg.sender,
         text: msg.text,
         isUser: msg.sender === uid,
+        reactionsRead: msg?.reactionsRead ,
       };
 
       if (foundEntry) {
-        const senderEntry = foundEntry.details.find((d) => d.sender === sender);
-        if (senderEntry) {
-          senderEntry.messages.push(newDetail);
-          senderEntry.messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-        } else {
-          foundEntry.details.push({
-            sender: sender,
-            messages: [newDetail],
-          });
-        }
+        foundEntry.details.push(newDetail);
         foundEntry.lastMessage = newDetail.text;
         foundEntry.unreadCount = unreadCount;
       } else {
         output.push({
           contact: contactName,
           lastMessage: newDetail.text,
-          content: msg.photoURL || getContentFromReceiver(contactName),
+          content: msg.photo || getContentFromReceiver(contactName),
           bgColor: getRandomLightColor(),
           color: getRandomDarkColor(),
-          details: [
-            {
-              sender: sender,
-              messages: [newDetail],
-            },
-          ],
+          details: [newDetail],
           unreadCount,
         });
       }
@@ -347,27 +274,27 @@ const ChatSideBar = () => {
 
     output.sort(
       (a, b) =>
-        new Date(b.details[b.details.length - 1].messages[b.details[b.details.length - 1].messages.length - 1].createdAt) - new Date(a.details[a.details.length - 1].messages[a.details[a.details.length - 1].messages.length - 1].createdAt),
+        new Date(b.details[b.details.length - 1].createdAt) - new Date(a.details[a.details.length - 1].createdAt),
     );
+    output.forEach((item) => {
+      item.details.sort(
+        (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+      );
+    });
     return output;
   }, [messages, uid, name]);
 
-  const getLastReadTimestamp = (contactName) => {
-    const userInfo = JSON.parse(localStorage.getItem('userInfo')) || {};
-    userInfo.lastReadTimestamps = userInfo.lastReadTimestamps || {};
-    return userInfo.lastReadTimestamps[contactName] || 0;
-  };
-
   const markAllAsRead = (contactName) => {
+
     const userInfo = JSON.parse(localStorage.getItem('userInfo')) || {};
     userInfo.lastReadTimestamps = userInfo.lastReadTimestamps || {};
     userInfo.lastReadTimestamps[contactName] = new Date().toISOString();
     localStorage.setItem('userInfo', JSON.stringify(userInfo));
+    updateUserReadUnread()
   };
 
   const updateUserStatus = useCallback(async (status) => {
-    console.log(useCurrentUser.currentUser)
-    const userId = useCurrentUser.currentUser.uid; // Assuming you have the current user's ID
+    const userId = useCurrentUser.currentUser?.uid; // Assuming you have the current user's ID
     try {
       await firestore.collection('UserStatus').doc(userId).set({
         status: status,
@@ -379,7 +306,6 @@ const ChatSideBar = () => {
   }, []);
 
   useEffect(() => {
-    console.log(useCurrentUser)
     const userId = useCurrentUser.uid; // Assuming you have the current user's ID
     const unsubscribe = firestore.collection('UserStatus').doc(userId)
       .onSnapshot(docSnapshot => {
@@ -390,7 +316,7 @@ const ChatSideBar = () => {
       }, err => {
         console.error(`Encountered error: ${err}`);
       });
-  
+
     // Cleanup listener on component unmount
     return () => unsubscribe();
   }, []);
@@ -423,49 +349,133 @@ const ChatSideBar = () => {
   };
 
 
-  const handleUserClick = (user) => {
-    setSelectedUser({
-      contact: user.name,
+  const handleUserClick = (e, user) => {
+    const newUser = {
+      contact: user.uid,
       content: user.photo || avatar1,
       bgColor: getRandomLightColor(),
       color: getRandomDarkColor(),
       details: [],
       unreadCount: 0,
-    });
+    };
+
+    setSelectedUser(newUser);
     setSearchQuery('');
     setSearchResults([]);
+    setMessageInput('Hi');
+    sendMessage(e, newUser);
   };
+
+  const sendMessage = useCallback(async (e, user) => {
+    e.preventDefault();
+    if (!user || !user.contact) {
+      console.error('No user selected or user contact is missing.');
+      return;
+    }
+
+    try {
+      await firestore.collection('Messages').add({
+        id: uuidv4(),
+        text: messageInput,
+        createdAt: new Date().toISOString(),
+        photo: photo || null,
+        reciever: user.contact,
+        sender: uid,
+        group: false
+      });
+    } catch (error) {
+      console.error('Error adding event: ', error);
+    }
+    setMessageInput('');
+  }, [messageInput, uid, photo]);
 
 
   const handleStatusMenuClose = useCallback(() => {
     setAnchorEl(null);
   }, []);
-  
-  useEffect(() => {
-    const fetchAndUpdateUserStatuses = async () => {
-      const updatedAvatars = await Promise.all(avatars.map(async (avatar) => {
-        const statusSnapshot = await firestore.collection('UserStatus').doc(avatar.uid).get();
-        const status = statusSnapshot.exists ? statusSnapshot.data().status : 'Offline';
-        return { ...avatar, status }; // Add the status to the avatar object
-      }));
-      setAvatars(updatedAvatars); // Update the avatars state with the new information
-    };
-  
-    fetchAndUpdateUserStatuses();
-    //console.log(avatars)
-  }, [avatars]); 
 
-// Step 3: Integrate with Existing Code
-// Modify the handleStatusChange function to use the updateUserStatus function
-const handleStatusChange = useCallback((status) => {
-  updateUserStatus(status);
-  handleStatusMenuClose();
-}, [updateUserStatus, handleStatusMenuClose]);
+  // Step 3: Integrate with Existing Code
+  // Modify the handleStatusChange function to use the updateUserStatus function
+  const handleStatusChange = useCallback((status) => {
+    updateUserStatus(status);
+    handleStatusMenuClose();
+  }, [updateUserStatus, handleStatusMenuClose]);
 
   const statusOptions = useMemo(() => [
     'Available', 'Busy', 'Do Not Disturb', 'In a Call', 'Be Right Back', 'Appear Away', 'Appear Offline'
   ], []);
 
+  const fetchUserDetails = async () => {
+    const userDetails = await Promise.all(avatars?.map(async (avatar) => {
+      const userRef = doc(firestore, "Users", avatar?.contact);
+      const userDoc = await getDoc(userRef);
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        return { ...avatar, name: userData.name, photo: userData.photo };
+      } else {
+        return avatar;
+      }
+    }));
+
+    setUserDetails(userDetails);
+    return userDetails; // return the fetched user details
+  };
+
+  useEffect(() => {
+    if (selectedUser) {
+      const fetchDataAndUpdate = async () => {
+        const fetchedUserDetails = await fetchUserDetails(selectedUser.contact);
+        const filteredData = fetchedUserDetails.filter((userDetail) => userDetail.contact === selectedUser.contact);
+        setSelectedUser(filteredData[0]);
+        setExpanded(true);
+      };
+  
+      fetchDataAndUpdate();
+    }
+  }, [selectedUser, fetchUserDetails]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const userDetails = await fetchUserDetails();
+    };
+
+    fetchData();
+  }, [avatars]);
+
+  const handleExpand = useCallback(() => {
+    const fetchDataAndUpdate = async () => {
+      const fetchedUserDetails = await fetchUserDetails();
+      const filteredData = fetchedUserDetails.filter((userDetail) => userDetail.contact === avatars[0].contact);
+      setSelectedUser(filteredData[0]);
+      setExpanded(true);
+    };
+
+    fetchDataAndUpdate();
+  }, [avatars, fetchUserDetails]);
+
+  const handleAvatarClick = useCallback((avatar) => {
+    const fetchDataAndUpdate = async () => {
+      const fetchedUserDetails = await fetchUserDetails();
+      const filteredData = fetchedUserDetails.filter((userDetail) => userDetail.contact === avatar.contact);
+      setSelectedUser(filteredData[0]);
+      setExpanded(true);
+    };
+
+    fetchDataAndUpdate();
+    firestore.collection('Messages').onSnapshot(
+      (snapshot) => {
+        const eventsData = [];
+        snapshot.forEach((doc) => {
+          eventsData.push({ id: doc.id, ...doc.data() });
+        });
+        setMessages(eventsData);
+      },
+      (error) => {
+        console.error("Error fetching events:", error);
+      }
+    );
+    markAllAsRead(avatar.contact);
+  }, [fetchUserDetails]);
 
   return (
     <SidebarContainer expanded={expanded}>
@@ -477,41 +487,28 @@ const handleStatusChange = useCallback((status) => {
           <Box my={10}>
             <StatusBadgeComponent
               userStatus={userStatus}
-              avatar1={avatar1}
+              avatar1={{ 'photo': photo, 'unreadCount': 0 }}
               handleStatusMenuOpen={handleStatusMenuOpen}
               openMenu={true}
-              alt={`Avatar`} />
+              showCount={false}
+              alt={`Avatar`}
+              shrinkedName={getContentFromReceiver(name)} />
             <StatusMenuComponent anchorEl={anchorEl} handleStatusMenuClose={handleStatusMenuClose} statusOptions={statusOptions} handleStatusChange={handleStatusChange} />
 
             <AvatarContainer>
-              {avatars.map((avatar, index) => (
-                <Box key={index} position="relative" onClick={() => handleAvatarClick(avatar)}>
-                  <StatusBadgeComponent
-                    userStatus={avatar.status || 'Appear Offline'}
-                    avatar1={avatar}
-                    openMenu={false}
-                    alt={`Avatar ${index + 1}`} />
+              {userDetails?.map((userDetail, index) => (
+                <Box key={index} position="relative" onClick={() => handleAvatarClick(userDetail)}>
 
-                  {avatar.unreadCount > 0 && (
-                    <Box
-                      position="absolute"
-                      top="-4px"
-                      right="-4px"
-                      bgcolor="#ef4444"
-                      color="#fff"
-                      borderRadius="50%"
-                      width="20px"
-                      height="20px"
-                      display="flex"
-                      alignItems="center"
-                      justifyContent="center"
-                      fontSize="10px"
-                      fontWeight={900}
-                    >
-                      {avatar.unreadCount}
-                    </Box>
-                  )}
-                  {avatar.status === 'busy' && (
+                  <StatusBadgeComponent
+                    userStatus={userDetail.status || 'Appear Offline'}
+                    avatar1={userDetail}
+                    openMenu={false}
+                    alt={`Avatar ${index + 1}`}
+                    showCount={true}
+                    shrinkedName={getContentFromReceiver(userDetail.name)} />
+
+
+                  {userDetail.status === 'busy' && (
                     <Box
                       position="absolute"
                       bottom="0"
@@ -534,23 +531,24 @@ const handleStatusChange = useCallback((status) => {
             <Box display="flex" alignItems="center">
               <StatusBadgeComponent
                 userStatus={userStatus}
-                avatar1={avatar1}
-                openMenu={false}
-                alt={`Avatar`} />
+                avatar1={{ 'photo': photo, 'unreadCount': 0 }}
+                handleStatusMenuOpen={handleStatusMenuOpen}
+                openMenu={true}
+                showCount={true}
+                alt={`Avatar`}
+                shrinkedName={getContentFromReceiver(name)} />
               <Typography variant="h6">Chats</Typography>
             </Box>
             <Box display="flex" alignItems="center" flexGrow={1}>  {/* Line Updated */}
               <div ref={searchAnchorRef} style={{ width: "100%", margin: "0 16px" }}>
                 <SearchComponent searchQuery={searchQuery} handleSearchChange={handleSearchChange} /> {/* Line Updated */}
               </div>
-
-
               <Popper open={searchQuery.length > 1}
                 anchorEl={searchAnchorRef.current} placement="bottom" style={{ zIndex: 1300, width: '50%' }}>
                 <Paper>
                   <List dense>
                     {searchResults.map((user) => (
-                      <ListItemButton key={user.uid} onClick={() => handleUserClick(user)}>
+                      <ListItemButton key={user.uid} onClick={(e) => handleUserClick(e, user)}>
                         <ListItemAvatar>
                           <Avatar src={user.photo || avatar1} alt={user.name}>
                             {user.name[0]}
@@ -590,37 +588,20 @@ const handleStatusChange = useCallback((status) => {
           <ChatComponentParent>
             <ChatSummaryContainer>
               <List sx={{ width: '100%', bgcolor: 'background.paper' }}>
-                {avatars.map((avatar, index) => (
-                  <ListItem key={index} alignItems="flex-start" button onClick={() => handleAvatarClick(avatar)}>
+                {userDetails?.map((userDetail, index) => (
+                  <ListItem key={index} alignItems="flex-start" button onClick={() => handleAvatarClick(userDetail)}>
                     <ListItemAvatar>
                       <StatusBadgeComponent
-                        userStatus={avatar.status || 'Appear Offline'}
-                        avatar1={avatar1}
+                        userStatus={userDetail.status || 'Appear Offline'}
+                        avatar1={userDetail}
                         openMenu={false}
-                        alt={avatar.reciever} />
-
-                      {avatar.unreadCount > 0 && (
-                        <Box
-                          position="absolute"
-                          top="-4px"
-                          right="-4px"
-                          bgcolor="#ef4444"
-                          color="#fff"
-                          borderRadius="50%"
-                          width="20px"
-                          height="20px"
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                          fontSize="10px"
-                          fontWeight={900}
-                        >
-                          {avatar.unreadCount}
-                        </Box>
-                      )}
+                        alt={userDetail.name}
+                        showCount={true}
+                        shrinkedName={getContentFromReceiver(userDetail.name)}
+                      />
                     </ListItemAvatar>
                     <ListItemText
-                      primary={avatar.reciever}
+                      primary={userDetail.name}
                       secondary={
                         <React.Fragment>
                           <Typography
@@ -629,7 +610,7 @@ const handleStatusChange = useCallback((status) => {
                             variant="body2"
                             color="text.primary"
                           >
-                            {avatar.lastMessage}
+                            {userDetail.lastMessage}
                           </Typography>
                         </React.Fragment>
                       }
@@ -638,16 +619,27 @@ const handleStatusChange = useCallback((status) => {
                 ))}
               </List>
             </ChatSummaryContainer>
-            <MessagesContainer>
-              <ChatHeader>
-                <Box display="flex" alignItems="center">
-                  <AvatarComponent avatar={selectedUser} alt={selectedUser?.contact} />
-                  <Typography variant="h6">{selectedUser?.contact}</Typography>
-                </Box>
-              </ChatHeader>
-              <ChatMessagesComponent selectedUser={selectedUser} messagesEndRef={messagesEndRef} />
 
-              <ChatInputComponent messageInput={messageInput} setMessageInput={setMessageInput} sendMessage={sendMessage} />
+            <MessagesContainer>
+              {userDetails.length > 0 && <>
+                <ChatHeader>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <StatusBadgeComponent
+                      userStatus={selectedUser?.status || 'Appear Offline'}
+                      avatar1={selectedUser}
+                      openMenu={false}
+                      alt={selectedUser?.name}
+                      showCount={false}
+                      shrinkedName={getContentFromReceiver(selectedUser?.name)}
+                    />
+                    <Typography variant="h6">{selectedUser?.name}</Typography>
+                  </Box>
+                </ChatHeader>
+                <ChatMessagesComponent selectedUser={selectedUser}/>
+
+                <ChatInputComponent messageInput={messageInput} setMessageInput={setMessageInput} sendMessage={sendMessage} selectedUser={selectedUser} />
+              </>
+              }
             </MessagesContainer>
           </ChatComponentParent>
         </ChatContainer>

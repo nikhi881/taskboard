@@ -45,8 +45,10 @@ export function hslToHex(h, s, l) {
   }
   
   export function getContentFromReceiver(receiver) {
-    const [first, last] = receiver.split(' ');
-    return `${first.charAt(0).toUpperCase()}${last ? last.charAt(0).toUpperCase() : ''}`;
+    if(receiver){
+      const [first, last] = receiver.split(' ');
+      return `${first.charAt(0).toUpperCase()}${last ? last.charAt(0).toUpperCase() : ''}`;
+    }
   }
   
   // Convert stored UTC timestamp to local timezone for display

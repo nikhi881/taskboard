@@ -16,6 +16,10 @@ const CardContainer = styled(Box)(({ theme }) => ({
   backgroundColor: '#FFF',
   borderRadius: '8px',
   boxShadow: '0px 0px 4px rgba(0, 0, 0, 0.1)',
+  '&:hover': {
+    backgroundColor: '#f1f1f1',
+    boxShadow: '0px 0px 11px 0px #3333',
+  },
 }));
 
 const Header = styled(Box)(({ theme }) => ({
@@ -70,72 +74,78 @@ const StyledAvatar = styled(Avatar)(({ theme }) => ({
   height: '40px',
   border: '2px solid #fff',
 }));
-const Card = ({ task }) => {
+const Card = React.forwardRef((props, ref) => {
+  const { task, children } = props;
   return (
-    <CardContainer>
-      <Header>
-        <Typography variant="body1" fontWeight="600" color="#1f2633">
-          {task.title}
-        </Typography>
-        <Box display="flex" alignItems="center" gap="8px">
-          <img src={taskIcon} alt="Task Icon" width="20" height="20" />
-          <Typography variant="caption" color="#17a5e6" fontWeight="800">
-            {task.tasksCount}
+      <CardContainer ref={ref}>
+        <Header>
+          <Typography variant="body1" fontWeight="600" color="#1f2633">
+            {task.title}
           </Typography>
-        </Box>
-      </Header>
-      <Box display="flex" gap="8px" marginBottom="20px">
-        {task.labels.map((label, index) => (
-          <Label
-            key={index}
-            style={{
-              backgroundColor: label === '#UI007' ? '#f2f4f7' : label === 'Design' ? '#3b82f61a' : '#eab3081a',
-              color: label === 'Design' ? '#2563eb' : label === 'Backlog' ? '#ca8a04' : '#606c80',
-            }}
-          >
-            {label}
-          </Label>
-        ))}
-      </Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center">
-      <AvatarGroup>
-          {task.avatars.map((avatar, index) => (
-            <StyledAvatar
+          <Box display="flex" alignItems="center" gap="8px">
+            <img src={taskIcon} alt="Task Icon" width="20" height="20" />
+            <Typography variant="caption" color="#17a5e6" fontWeight="800">
+              {task.tasksCount}
+            </Typography>
+          </Box>
+        </Header>
+        <Box display="flex" gap="8px" marginBottom="20px">
+          {task.labels?.map((label, index) => (
+            <Label
               key={index}
-              src={avatar}
-              alt={`avatar-${index}`}
-              sx={{ marginLeft: index !== 0 && '-12px' }}
-            />
+              style={{
+                backgroundColor: label === '#UI007' ? '#f2f4f7' : label === 'Design' ? '#3b82f61a' : '#eab3081a',
+                color: label === 'Design' ? '#2563eb' : label === 'Backlog' ? '#ca8a04' : '#606c80',
+              }}
+            >
+              {label}
+            </Label>
+            
           ))}
-          <Avatar sx={{ width: 32,
+        </Box>
+        <Box display="flex" justifyContent="space-between" alignItems="center">
+          <AvatarGroup>
+            {task.avatars?.map((avatar, index) => (
+              <StyledAvatar
+                key={index}
+                src={avatar}
+                alt={`avatar-${index}`}
+                sx={{ marginLeft: index !== 0 && '-12px' }}
+              />
+            ))}
+            <Avatar sx={{
+              width: 32,
               height: 32,
               backgroundColor: '#f2f4f7',
               color: '#606c80',
               fontWeight: '800',
-              fontSize: '10px', marginLeft: '-12px' }}>
-            +5
-          </Avatar>
-          <AddButton>
-            <AddIcon width="16" height="16" />
-          </AddButton>
-        </AvatarGroup>
-        
-        <Box display="flex" gap="20px">
-          <IconBox>
-            <img src={filePresent} alt="File Icon" width="20" height="20" />
-            <Typography>{task.filesCount}</Typography>
-          </IconBox>
-          <IconBox>
-            <img src={messageIcon} alt="Comment Icon" width="20" height="20" />
-            <Typography>{task.commentsCount}</Typography>
-          </IconBox>
+              fontSize: '10px', marginLeft: '-12px'
+            }}>
+              +5
+            </Avatar>
+            <AddButton>
+              <AddIcon width="16" height="16" />
+            </AddButton>
+          </AvatarGroup>
+
+          <Box display="flex" gap="20px">
+            <IconBox>
+              <img src={filePresent} alt="File Icon" width="20" height="20" />
+              <Typography>{task.filesCount}</Typography>
+            </IconBox>
+            <IconBox>
+              <img src={messageIcon} alt="Comment Icon" width="20" height="20" />
+              <Typography>{task.commentsCount}</Typography>
+              
+            </IconBox>
+          </Box>
         </Box>
-      </Box>
-    </CardContainer>
+        {children}
+      </CardContainer>
   );
-};
+});
 
 
-export default function App({task}) {
+export default function App({ task }) {
   return <Card task={task} />;
 }

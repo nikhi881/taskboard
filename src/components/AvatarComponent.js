@@ -9,15 +9,15 @@ const StyledAvatar = styled(Avatar)({
 });
 
 const AvatarComponent = ({ avatar, alt }) => {
-  return <StyledAvatar src={avatar.src}
+  return <StyledAvatar src={avatar?.src}
     alt={alt}
     style={{
-      backgroundColor: avatar.bgColor,
-      color: avatar.color,
+      backgroundColor: avatar?.bgColor,
+      color: avatar?.color,
       fontSize: '10px',
       fontWeight: 800,
     }}>
-    {avatar.content}
+    {avatar?.content}
   </StyledAvatar>;
 };
 

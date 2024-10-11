@@ -15,7 +15,14 @@ const ChatInput = styled(Box)({
   boxShadow: '0px 0px 10px 0px #cbcbcb',
 });
 
-const ChatInputComponent = ({ messageInput, setMessageInput, sendMessage }) => {
+const ChatInputComponent = ({ messageInput, setMessageInput, sendMessage, selectedUser }) => {
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter') {
+        sendMessage(event,selectedUser)
+    }
+}
+
   return (
     <ChatInput>
       <TextField
@@ -25,9 +32,10 @@ const ChatInputComponent = ({ messageInput, setMessageInput, sendMessage }) => {
         fullWidth
         value={messageInput}
         onChange={(e) => setMessageInput(e.target.value)}
+        onKeyDown={handleKeyDown}
       // additional props
       />
-      <IconButton onClick={sendMessage}>
+      <IconButton onClick={(e) => sendMessage(e,selectedUser)}>
         <SendIcon />
       </IconButton>
     </ChatInput>
